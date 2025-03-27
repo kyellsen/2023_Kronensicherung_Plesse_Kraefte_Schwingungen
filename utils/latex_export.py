@@ -1,6 +1,7 @@
 from pathlib import Path
 from slugify import slugify
 import pandas as pd
+from typing import Optional
 
 
 def create_caption(caption: str, caption_long: str = None) -> str:
@@ -101,25 +102,65 @@ def save_latex_table(latex_string: str, caption: str, latex_export_directory: Pa
         print(f"Error saving LaTeX table: {e}")
 
 
-def extract_latex_dict_from_json(data_dict: dict, keys: list[str], fields: list[str]) -> pd.DataFrame:
+def build_data_dict_df(
+    data_dict: dict,
+    keys: Optional[list[str]] = None,
+    index_name: str = "Variable",
+    escape_index: bool = False,
+    select_latex_fields: bool = False
+) -> pd.DataFrame:
     """
-    Extrahiere eine LaTeX-kompatible Data-Dictionary-Tabelle aus einem JSON-Daten-Dictionary.
-
-    Escaped nur den "Variable"-Key für LaTeX (z.B. "sensor_id" → "sensor\\_id").
+    Build a structured DataFrame from a nested dictionary, optionally formatted for LaTeX output.
 
     Parameters:
-        data_dict (dict): Vollständiges Daten-Dictionary (z.B. aus JSON geladen)
-        keys (list[str]): Liste der auszuwertenden Variablennamen
-        fields (list[str]): Liste der Felder (Spalten) für die LaTeX-Tabelle
+        data_dict (dict): Nested dictionary with field information.
+        keys (list[str], optional): Keys to extract. Defaults to all keys in data_dict.
+        index_name (str): Name of the column where the dictionary keys are stored. Default: "Variable".
+        escape_index (bool): If True and `select_latex_fields=True`, escapes underscores in index for LaTeX.
+        select_latex_fields (bool): If True, filters and reorders columns for LaTeX-ready output.
 
     Returns:
-        pd.DataFrame: DataFrame mit den gewählten Feldern und LaTeX-kompatiblen Inhalten
+        pd.DataFrame: Structured DataFrame.
+
+    Raises:
+        ValueError: For missing fields or invalid input structures.
     """
-    result = {field: [] for field in fields}
-    for key in keys:
-        for field in fields:
-            if field == "Variable":
-                result["Variable"].append(key.replace("_", "\\_"))
-            else:
-                result[field].append(data_dict[key][field])
-    return pd.DataFrame(result)
+    if not isinstance(data_dict, dict):
+        raise ValueError("Input must be a dictionary.")
+
+    try:
+        if keys is None:
+            keys = list(data_dict.keys())
+
+        missing_keys = [k for k in keys if k not in data_dict]
+        if missing_keys:
+            raise ValueError(f"Keys not found in data_dict: {missing_keys}")
+
+        filtered_dict = {k: data_dict[k] for k in keys}
+        df = pd.DataFrame.from_dict(filtered_dict, orient="index")
+
+        # Insert key column with optional LaTeX escaping
+        index_values = [
+            k.replace("_", "\\_") if escape_index and select_latex_fields else k
+            for k in df.index
+        ]
+        df[index_name] = index_values
+
+        # Reorder columns to place index_name first
+        df.reset_index(drop=True, inplace=True)
+        cols = [index_name] + [col for col in df.columns if col != index_name]
+        df = df[cols]
+
+        # If LaTeX export is selected, validate and reduce columns
+        if select_latex_fields:
+            required_fields = ["Zeichen", index_name, "Deutsch", "Einheit", "Beschreibung"]
+            missing_fields = [f for f in required_fields if f not in df.columns]
+            if missing_fields:
+                raise ValueError(f"Missing fields for LaTeX export: {missing_fields}")
+            df = df[required_fields]
+
+        return df
+
+    except Exception as e:
+        raise ValueError(f"Failed to build DataFrame: {e}")
+
