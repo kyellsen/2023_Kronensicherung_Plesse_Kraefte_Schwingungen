@@ -1,5 +1,4 @@
 # project_config.py
-
 from pathlib import Path
 
 # Hauptpfad des Projekts
