@@ -16,3 +16,6 @@ latex_export_directory = working_directory / "export_latex"
 # Verzeichnisse sicherstellen
 data_export_directory.mkdir(parents=True, exist_ok=True)
 latex_export_directory.mkdir(parents=True, exist_ok=True)
+
+
+
